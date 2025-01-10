@@ -15,6 +15,11 @@ GET_IFD_L3_CONTAINTER_URI = '/bpocore/market/api/v1/resources?exactTypeId=ifd.v6
 POST_IFD_OP_URI = '/bpocore/market/api/v1/resources/{L3_SERVICE_CONTAINER_ID}/operations'
 GET_IFD_OP_STATUS_URI = '/bpocore/market/api/v1/resources/{RESO_ID}/operations/{OPER_ID}'
 
+class NotFoundException(Exception):
+    def __init__(self, message):
+        super().__init__(message)
+        self.message = message
+
 
 class ApiClient(QMainWindow):
     def __init__(self):
@@ -183,7 +188,7 @@ class ApiClient(QMainWindow):
         self.token = None
         self.headers_dict = None
 
-    def get_token_call(self):
+    def get_token_call(self) ->str:
         url = self.server_url + TOKEN_URI
         username = self.user_name_input.text() or 'admin'
         password = self.password_input.text() or 'adminpw'
@@ -191,6 +196,8 @@ class ApiClient(QMainWindow):
         response1 = requests.post(url, headers={}, data=payload_dict, timeout=10, verify=False)
         response1_data = response1.json()
         self.token = response1_data.get('token')
+        if not self.token:
+            raise NotFoundException(f'Token not obtained. Responnse = {response1_data}')
         print(f'Token obtained: {self.token}')
         return self.token
     
@@ -200,8 +207,11 @@ class ApiClient(QMainWindow):
         response = requests.get(url, headers=headers_dict, timeout=10, verify=False)
         response_data = response.json()
         print(response_data)
-        print(f'L3 service container ID obtained: {response_data.get("items")[0]["id"]}')
-        return response_data.get('items')[0]['id']
+        container_id = response_data.get('items', [])[0].get('id')
+        if not container_id:
+            raise NotFoundException(f'L3 service container ID not obtained. Response = {response_data}')
+        print(f'L3 service container ID obtained: {container_id}')
+        return container_id
 
     def post_ifd_op_call(self, l3_service_container_id: str, payload: dict)->str:
         url = self.server_url + POST_IFD_OP_URI.format(L3_SERVICE_CONTAINER_ID=l3_service_container_id)
@@ -237,6 +247,11 @@ class ApiClient(QMainWindow):
     def make_api_calls(self):
         self.response_display_2.setText('')
         payload = self.payload_input.toPlainText()
+        try:
+            json.loads(payload)
+        except json.JSONDecodeError as e:
+            self.response_display_2.setText(f"Invalid JSON payload: {str(e)}")
+            raise Exception(f"Invalid JSON payload: {str(e)}")
         if self.server_input.text():
             server_ip = self.server_input.text()
         else:
